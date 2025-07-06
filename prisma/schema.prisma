@@ -1,0 +1,340 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User and Authentication Models
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  emailVerified   DateTime?
+  name            String?
+  image           String?
+  phone           String?   @unique
+  phoneVerified   DateTime?
+  role            UserRole  @default(BUSINESS_OWNER)
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  accounts        Account[]
+  sessions        Session[]
+  businesses      Business[]
+  businessMembers BusinessMember[]
+  activities      Activity[]
+
+  @@map("users")
+}
+
+model Business {
+  id                String          @id @default(cuid())
+  name              String
+  description       String?
+  businessType      String?
+  phone             String?
+  email             String?
+  address           String?
+  city              String?
+  region            String?
+  website           String?
+  logo              String?
+  currency          String          @default("USD")
+  timezone          String          @default("Africa/Mogadishu")
+  language          String          @default("en")
+  subscription      SubscriptionType @default(FREE)
+  subscriptionEndsAt DateTime?
+  isActive          Boolean         @default(true)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  // Relations
+  owner           User               @relation(fields: [ownerId], references: [id])
+  ownerId         String
+  members         BusinessMember[]
+  customers       Customer[]
+  products        Product[]
+  services        Service[]
+  sales           Sale[]
+  expenses        Expense[]
+  invoices        Invoice[]
+  activities      Activity[]
+  paymentMethods  PaymentMethod[]
+
+  @@map("businesses")
+}
+
+model BusinessMember {
+  id          String           @id @default(cuid())
+  role        BusinessRole     @default(STAFF)
+  permissions String[]         // Array of permission strings
+  isActive    Boolean          @default(true)
+  joinedAt    DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Relations
+  user       User     @relation(fields: [userId], references: [id])
+  userId     String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  businessId String
+
+  @@unique([userId, businessId])
+  @@map("business_members")
+}
+
+model Customer {
+  id          String    @id @default(cuid())
+  name        String
+  email       String?
+  phone       String?
+  address     String?
+  city        String?
+  notes       String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  businessId String
+  sales      Sale[]
+  invoices   Invoice[]
+
+  @@map("customers")
+}
+
+model Product {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  sku         String?
+  price       Decimal   @db.Decimal(10, 2)
+  cost        Decimal?  @db.Decimal(10, 2)
+  quantity    Int       @default(0)
+  minQuantity Int       @default(0)
+  unit        String    @default("pcs")
+  category    String?
+  image       String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  businessId String
+  saleItems  SaleItem[]
+
+  @@map("products")
+}
+
+model Service {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  price       Decimal   @db.Decimal(10, 2)
+  duration    Int?      // Duration in minutes
+  category    String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  business   Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  businessId String
+  saleItems  SaleItem[]
+
+  @@map("services")
+}
+
+model Sale {
+  id          String      @id @default(cuid())
+  saleNumber  String      @unique
+  total       Decimal     @db.Decimal(10, 2)
+  tax         Decimal?    @db.Decimal(10, 2)
+  discount    Decimal?    @db.Decimal(10, 2)
+  notes       String?
+  status      SaleStatus  @default(COMPLETED)
+  saleDate    DateTime    @default(now())
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  business    Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  businessId  String
+  customer    Customer?  @relation(fields: [customerId], references: [id])
+  customerId  String?
+  items       SaleItem[]
+
+  @@map("sales")
+}
+
+model SaleItem {
+  id          String    @id @default(cuid())
+  quantity    Int
+  unitPrice   Decimal   @db.Decimal(10, 2)
+  total       Decimal   @db.Decimal(10, 2)
+  
+  // Relations
+  sale       Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  saleId     String
+  product    Product? @relation(fields: [productId], references: [id])
+  productId  String?
+  service    Service? @relation(fields: [serviceId], references: [id])
+  serviceId  String?
+
+  @@map("sale_items")
+}
+
+model Expense {
+  id          String        @id @default(cuid())
+  description String
+  amount      Decimal       @db.Decimal(10, 2)
+  category    String?
+  receipt     String?       // URL to receipt image
+  expenseDate DateTime      @default(now())
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Relations
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  businessId String
+
+  @@map("expenses")
+}
+
+model Invoice {
+  id          String        @id @default(cuid())
+  invoiceNumber String      @unique
+  amount      Decimal       @db.Decimal(10, 2)
+  tax         Decimal?      @db.Decimal(10, 2)
+  discount    Decimal?      @db.Decimal(10, 2)
+  total       Decimal       @db.Decimal(10, 2)
+  dueDate     DateTime
+  status      InvoiceStatus @default(PENDING)
+  notes       String?
+  paidAt      DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Relations
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  businessId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  customerId String
+
+  @@map("invoices")
+}
+
+model PaymentMethod {
+  id          String  @id @default(cuid())
+  name        String
+  type        String  // 'cash', 'bank', 'mobile', 'zaad', 'evcplus'
+  isActive    Boolean @default(true)
+
+  // Relations
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  businessId String
+
+  @@map("payment_methods")
+}
+
+model Activity {
+  id          String       @id @default(cuid())
+  type        ActivityType
+  description String
+  metadata    Json?        // Additional data in JSON format
+  createdAt   DateTime     @default(now())
+
+  // Relations
+  user       User     @relation(fields: [userId], references: [id])
+  userId     String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  businessId String
+
+  @@map("activities")
+}
+
+// Enums
+enum UserRole {
+  ADMIN
+  BUSINESS_OWNER
+  STAFF
+}
+
+enum BusinessRole {
+  OWNER
+  MANAGER
+  STAFF
+}
+
+enum SubscriptionType {
+  FREE
+  PREMIUM
+  ENTERPRISE
+}
+
+enum SaleStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum ActivityType {
+  SALE_CREATED
+  CUSTOMER_ADDED
+  PRODUCT_ADDED
+  EXPENSE_ADDED
+  INVOICE_CREATED
+  PAYMENT_RECEIVED
+  USER_LOGIN
+  SETTINGS_UPDATED
+}
