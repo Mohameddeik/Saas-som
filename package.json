@@ -1,6 +1,6 @@
 {
-  "name": "somalia-business-saas",
-  "version": "0.1.0",
+  "name": "kulmiye-data",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
